@@ -1,0 +1,13 @@
+#+title: Simple framework for IRC bots
+
+* Rationale
+An easy-to-use framework to build IRC bots in golang.
+
+* Stuff to do
++ [ ] Properly add Handler to the bot
++ [ ] Test the ~bot~ package
++ [ ] Add more Test the ~message~ package
++ [ ] Add setup function to run after successful login
++ [ ] Handle kick event :bug:
++ [ ] Properly shutdown the server :bug:
++ [ ] /carriage return - line feed/ missing in command received :bug:
