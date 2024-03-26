@@ -12,7 +12,6 @@ var (
 	InvalidCommand    = errors.New("Cannot parse command, invalid input")
 	InvalidParam      = errors.New("Cannot parse param, invalid input")
 	InvalidCharacter  = errors.New("Invalid character detected")
-	MissingCRLF       = errors.New("Missing CarriageReturn LineFeed")
 	MiddleParamToLong = errors.New("Middle Param to long")
 )
 
@@ -26,22 +25,17 @@ type Message struct {
 func ParseMessage(input string) (*Message, error) {
 	chars := []byte(input)
 
-	// FIXME: input already arrive without CRLF
-	size := len(chars)
-	// if size <= 2 {
-	// 	return nil, InvalidInput
-	// }
-	// if chars[size - 2] != '\r' && chars[size - 1] != '\n' {
-	// 	return nil, MissingCRLF
-	// }
-	// limit := size - 2
-	limit := size
+	limit := len(chars)
+
+	if limit == 0 {
+		return nil, InvalidInput
+	}
 
 	return parseTags(chars, limit, &Message{
-		Tags: []string{},
+		Tags: nil,
 		Prefix: "",
 		Command: "",
-		Params: []string{},
+		Params: nil,
 	})
 }
 

@@ -9,35 +9,21 @@ func TestEdgeCases(t *testing.T) {
 	t.Run("empty message", func(t *testing.T) {
 		_, err := ParseMessage("")
 		if err == nil || err != InvalidInput {
-			t.Errorf("Expected error to be %q, got %q", InvalidInput, err)
-		}
-	})
-
-	t.Run("empty string with carriage return and line feed", func(t *testing.T) {
-		_, err := ParseMessage("\r\n")
-		if err == nil || err != InvalidInput {
-			t.Errorf("Expected error to be %q, got %q", InvalidInput, err)
-		}
-	})
-
-	t.Run("missing carriage return or line feed at the end", func(t *testing.T) {
-		_, err := ParseMessage("input not properly ended")
-		if err == nil || err != MissingCRLF {
-			t.Errorf("Expected error to be %q, got %q", MissingCRLF, err)
+			t.Errorf("Expected error to be %q, got '%v'", InvalidInput, err)
 		}
 	})
 
 	t.Run("params cannot be more than 14", func(t *testing.T) {
 		_, err := ParseMessage("PRIVMSG a b c d e f g h i j k l m n o\r\n")
 		if err == nil || err != InvalidParam {
-			t.Errorf("Expected error to be %q, got %q", InvalidParam, err)
+			t.Errorf("Expected error to be %q, got '%v'", InvalidParam, err)
 		}
 	})
 
 	t.Run("param cannot be more than 14 characters long", func(t *testing.T) {
 		_, err := ParseMessage("PRIVMSG abcdefghijklmno\r\n")
 		if err == nil || err != InvalidParam {
-			t.Errorf("Expected error to be %q, got %q", InvalidParam, err)
+			t.Errorf("Expected error to be %q, got '%v'", InvalidParam, err)
 		}
 	})
 }
@@ -50,9 +36,9 @@ func TestParseMessage(t *testing.T) {
 	} {
 		{
 			Name: "Test NO tags, prefix & trailing",
-			Input: "PRIVMSG #test hello\r\n",
+			Input: "PRIVMSG #test hello",
 			Expected: &Message{
-				Tags: []string{},
+				Tags: nil,
 				Prefix: "",
 				Command: "PRIVMSG",
 				Params: []string{"#test", "hello"},
@@ -60,7 +46,7 @@ func TestParseMessage(t *testing.T) {
 		},
 		{
 			Name: "Test NO prefix & trailing",
-			Input: "@a=b PRIVMSG #test hello\r\n",
+			Input: "@a=b PRIVMSG #test hello",
 			Expected: &Message{
 				Tags: []string{"a=b"},
 				Prefix: "",
@@ -70,7 +56,7 @@ func TestParseMessage(t *testing.T) {
 		},
 		{
 			Name: "Test with multiple tags",
-			Input: "@a=b;c;d=e;url=http://example.com PRIVMSG #test hello\r\n",
+			Input: "@a=b;c;d=e;url=http://example.com PRIVMSG #test hello",
 			Expected: &Message{
 				Tags: []string{"a=b", "c", "d=e", "url=http://example.com"},
 				Prefix: "",
@@ -80,7 +66,7 @@ func TestParseMessage(t *testing.T) {
 		},
 		{
 			Name: "Test prefix",
-				Input: "@a=b;c;d=e;url=http://example.com :irc.example.chat PRIVMSG #test hello\r\n",
+			Input: "@a=b;c;d=e;url=http://example.com :irc.example.chat PRIVMSG #test hello",
 			Expected: &Message{
 				Tags: []string{"a=b", "c", "d=e", "url=http://example.com"},
 				Prefix: "irc.example.chat",
@@ -90,7 +76,7 @@ func TestParseMessage(t *testing.T) {
 		},
 		{
 			Name: "Test numeric command",
-				Input: "@a=b;c;d=e;url=http://example.com :irc.example.chat 254 #test hello\r\n",
+			Input: "@a=b;c;d=e;url=http://example.com :irc.example.chat 254 #test hello",
 			Expected: &Message{
 				Tags: []string{"a=b", "c", "d=e", "url=http://example.com"},
 				Prefix: "irc.example.chat",
@@ -100,7 +86,7 @@ func TestParseMessage(t *testing.T) {
 		},
 		{
 			Name: "Test trailing",
-				Input: "@a=b;c;d=e;url=http://example.com :irc.example.chat 254 #test hello :this is the trailing part of the message\r\n",
+			Input: "@a=b;c;d=e;url=http://example.com :irc.example.chat 254 #test hello :this is the trailing part of the message",
 			Expected: &Message{
 				Tags: []string{"a=b", "c", "d=e", "url=http://example.com"},
 				Prefix: "irc.example.chat",

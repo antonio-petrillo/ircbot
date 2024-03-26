@@ -23,14 +23,16 @@ type IRCBotConfig struct {
 	QuitMessage string
 }
 
-type BotCommand func(b *IRCBot, input string)
+type CommandAction func(b *IRCBot, msg *message.Message)
+type ParamsAction func(b *IRCBot, msg *message.Message)
 
 type IRCBot struct {
-	config IRCBotConfig
-	connection *tls.Conn
-	stream chan string
+	config          IRCBotConfig
+	connection      *tls.Conn
+	stream          chan string
 	interruptSignal chan os.Signal
-	handlers map[string]BotCommand
+	commandHandlers map[string]CommandAction
+	paramsHandlers  map[string]ParamsAction
 }
 
 func NewIRCBot(config IRCBotConfig) *IRCBot {
@@ -39,12 +41,17 @@ func NewIRCBot(config IRCBotConfig) *IRCBot {
 		connection: nil,
 		stream: nil,
 		interruptSignal: nil,
-		handlers: make(map[string]BotCommand),
+		commandHandlers: make(map[string]CommandAction),
+		paramsHandlers: make(map[string]ParamsAction),
 	}
 }
 
-func (bot *IRCBot) AddBotCommand(command string, fn BotCommand){
-	bot.handlers[command] = fn
+func (bot *IRCBot) AddCommandHandler(command string, fn CommandAction) {
+	bot.commandHandlers[command] = fn
+}
+
+func (bot *IRCBot) AddParamsHandler(suffix string, fn ParamsAction) {
+	bot.paramsHandlers[suffix] = fn
 }
 
 func (bot *IRCBot) Connect() {
@@ -66,10 +73,10 @@ func (bot *IRCBot) Connect() {
 		stream := bot.stream
 		for {
 			line, err := textProtocol.ReadLine()
-			log.Printf("RECV: %s\n", line);
 			if err != nil {
-				panic(err)
+				close(stream)
 			}
+			log.Printf("RECV: %s\n", line);
 			stream <- line
 		}
 	} ()
@@ -94,12 +101,15 @@ func (bot *IRCBot) Login() {
 }
 
 func (bot *IRCBot) Disconnect() {
+	log.Printf("QUIT %s\n", bot.config.QuitMessage)
 	fmt.Fprintf(bot.connection, "QUIT %s\r\n", bot.config.QuitMessage)
 }
 
 func (bot *IRCBot) Serve() {
 	defer bot.connection.Close()
 	firstPing := true
+
+	backlog := []string{}
 loop:
 	for {
 		select {
@@ -118,12 +128,54 @@ loop:
 					fmt.Fprintf(bot.connection, "JOIN #test\r\n")
 					firstPing = false
 				}
-				break
+				continue
+			}
+
+			///////////////////////////////
+			// HACK to implement history //
+			///////////////////////////////
+			if msg.Command == "PRIVMSG" && len(msg.Params) > 0 {
+				trailing := msg.Params[len(msg.Params) - 1]
+				if trailing != "" && !strings.HasPrefix(trailing, "!history") {
+					backlog = append(backlog, trailing)
+				}
+
+				if strings.HasPrefix(trailing, "!history") {
+					go func() {
+						if len(backlog) > 0 {
+							fmt.Fprintf(bot.connection, "PRIVMSG #test here the previous %d messages\r\n", len(backlog))
+							for i, oldMessage := range backlog {
+								fmt.Fprintf(bot.connection, "PRIVMSG #test history[%d]=%s\r\n", i, oldMessage)
+							}
+						} else {
+							fmt.Fprintf(bot.connection, "PRIVMSG #test no message to retrieve\r\n")
+						}
+					} ()
+				}
+				continue
 			}
 
 
-			if strings.HasPrefix(msg.Params[len(msg.Params) - 1], "!echo") {
-				fmt.Fprintf(bot.connection, "PRIVMSG #test :%q\r\n", msg.Params[len(msg.Params) - 1])
+
+			///////////////////////////////
+
+			if fn, ok := bot.commandHandlers[msg.Command]; ok {
+				go func() {
+					fn(bot, msg)
+				}()
+				continue
+			}
+
+			size := len(msg.Params)
+			if size > 0 && len(msg.Params[size - 1]) > 0 {
+				// allow params action only on suffix on last params
+				key := strings.Split(msg.Params[size - 1], " ")[0]
+				if fn, ok := bot.paramsHandlers[key]; ok {
+					go func() {
+						fn(bot, msg)
+					}()
+				}
+				continue
 			}
 		case <-bot.interruptSignal:
 			log.Printf("IRCBOT %s (%s) quit\n", bot.config.Nickname, bot.config.Username)
